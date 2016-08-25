@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/gliderlabs/registrator/bridge"
+	"github.com/thermeon/registrator/bridge"
 	consulapi "github.com/hashicorp/consul/api"
 )
 
