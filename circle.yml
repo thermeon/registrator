@@ -1,25 +1,32 @@
 machine:
-  services:
-    - docker
+  environment:
+    PROJECT_PATH: "/$HOME/.go_workspace/src/github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME"
+  post:
+     - if [ ! -e ~/bin/ghr ]; then go get github.com/tcnksm/ghr; cp ~/.go_workspace/bin/ghr ~/bin/; fi
+
+checkout:
+  post:
+    - rm -rf .go_workspace
 
 dependencies:
-  pre:
-    - make circleci
   override:
-    - make build
-  post:
-    - cp build/* $CIRCLE_ARTIFACTS
+    - echo "Skipping default go get because vendor/ is in place"
+    # From https://discuss.circleci.com/t/overriding-go-inference-in-the-dependencies-phase/660
+    - rm -rf $HOME/.go_workspace/*
+    - mkdir -p $HOME/.go_workspace/src/github.com/$CIRCLE_PROJECT_USERNAME
+    - cp -r $HOME/$CIRCLE_PROJECT_REPONAME $PROJECT_PATH
+    - bash -x build_tools/version.sh
+  cache_directories:
+    - ~/bin
+
 
 test:
   override:
-    - /bin/true
+    - cd $PROJECT_PATH && go test -v $( go list ./... | grep -v "vendor/" )
 
 deployment:
-  master:
+  production:
     branch: master
     commands:
-      - eval $(docker run gliderlabs/pagebuilder circleci-cmd)
-  release:
-    branch: release
-    commands:
-      - make release
+      - GOARCH=amd64 GOOS=linux go build .
+      - PATH="~/bin/:$PATH" ghr -u $CIRCLE_PROJECT_USERNAME -r $CIRCLE_PROJECT_REPONAME -c $CIRCLE_SHA1 -replace release_$(cat Version) ./registrator
