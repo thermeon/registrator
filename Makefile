@@ -1,9 +1,10 @@
 NAME=thermeon/registrator
 VERSION=$(shell cat VERSION)
 
-docker: binary
-	docker build -t $(NAME):$(VERSION) .
+deploy:
+	shasum registrator
+	tar zcvf registrator.tgz registrator
+	cp registrator.tgz ~/repos/terraform-mesos/playbooks/roles/registrator/files/
 
 binary:
 	GOOS=linux GOARCH=amd64 go build .
-
