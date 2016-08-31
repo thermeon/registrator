@@ -28,5 +28,5 @@ deployment:
   production:
     branch: master
     commands:
-      - GOARCH=amd64 GOOS=linux go build .
+      - GOARCH=amd64 GOOS=linux cd $PROJECT_PATH && go build .
       - PATH="~/bin/:$PATH" ghr -u $CIRCLE_PROJECT_USERNAME -r $CIRCLE_PROJECT_REPONAME -c $CIRCLE_SHA1 -replace release_$(cat Version) ./registrator
