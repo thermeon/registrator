@@ -201,7 +201,8 @@ func (b *Bridge) add(containerId string, quiet bool) {
 	ports := make(map[string]ServicePort)
 
 	// Extract configured host port mappings, relevant when using --net=host
-	for port, published := range container.HostConfig.PortBindings {
+	for port, _ := range container.Config.ExposedPorts {
+		published := []dockerapi.PortBinding{ {"0.0.0.0", port.Port()}, }
 		ports[string(port)] = servicePort(container, port, published)
 	}
 
@@ -215,14 +216,20 @@ func (b *Bridge) add(containerId string, quiet bool) {
 		return
 	}
 
-	for _, port := range ports {
+	servicePorts := make(map[string]ServicePort)
+	for key, port := range ports {
 		if b.config.Internal != true && port.HostPort == "" {
 			if !quiet {
 				log.Println("ignored:", container.ID[:12], "port", port.ExposedPort, "not published on host")
 			}
 			continue
 		}
-		service := b.newService(port, len(ports) > 1)
+		servicePorts[key] = port
+	}
+
+	isGroup := len(servicePorts) > 1
+	for _, port := range servicePorts {
+		service := b.newService(port, isGroup)
 		if service == nil {
 			if !quiet {
 				log.Println("ignored:", container.ID[:12], "service on port", port.ExposedPort)
@@ -274,6 +281,7 @@ func (b *Bridge) newService(port ServicePort, isgroup bool) *Service {
 		service.Name += "-" + port.ExposedPort
 	}
 	var p int
+
 	if b.config.Internal == true {
 		service.IP = port.ExposedIP
 		p, _ = strconv.Atoi(port.ExposedPort)
@@ -282,6 +290,23 @@ func (b *Bridge) newService(port ServicePort, isgroup bool) *Service {
 		p, _ = strconv.Atoi(port.HostPort)
 	}
 	service.Port = p
+
+	if b.config.UseIpFromLabel != "" {
+		containerIp := container.Config.Labels[b.config.UseIpFromLabel]
+		if containerIp != "" {
+			slashIndex := strings.LastIndex(containerIp, "/")
+			if slashIndex > -1 {
+				service.IP = containerIp[:slashIndex]
+			} else {
+				service.IP = containerIp
+			}
+			log.Println("using container IP " + service.IP + " from label '" +
+				b.config.UseIpFromLabel  + "'")
+		} else {
+			log.Println("Label '" + b.config.UseIpFromLabel +
+				"' not found in container configuration")
+		}
+	}
 
 	if port.PortType == "udp" {
 		service.Tags = combineTags(
